@@ -137,7 +137,7 @@ wss.on('connection', (ws) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // サーバーを起動
-const PORT = 8080;
+const PORT = 3198;
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
