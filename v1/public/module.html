@@ -1,0 +1,23 @@
+<script src="script.js"></script>
+<script>
+    async function setupChat() {
+        const clientId = await chat.init('wss://tester.psannetwork.net', (status) => {
+            console.log(status);
+        });
+        console.log(`Your Client ID: ${clientId}`);
+
+        // ローカルオーディオを有効化
+        await chat.enableAudio();
+
+        // 通話リクエストを送信
+        document.getElementById('callButton').addEventListener('click', () => {
+            const targetId = document.getElementById('targetId').value;
+            chat.call(targetId);
+        });
+    }
+
+    setupChat();
+</script>
+
+<input id="targetId" placeholder="相手のID">
+<button id="callButton">通話リクエスト</button>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>特定クライアントと通話</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #status {
+            margin-top: 10px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>特定のクライアントと通話</h1>
+    <p>自分のID: <span id="clientId">待機中...</span></p>
+    <input id="targetId" placeholder="通話したい相手のIDを入力">
+    <button id="callButton">通話リクエスト</button>
+    <div id="status"></div>
+
+    <script>
+        const socket = new WebSocket('wss://tester.psannetwork.net');
+        let localStream, pc;
+
+        // DOM要素
+        const clientIdDisplay = document.getElementById('clientId');
+        const targetIdInput = document.getElementById('targetId');
+        const statusDisplay = document.getElementById('status');
+
+        document.getElementById('callButton').addEventListener('click', () => {
+            const targetId = targetIdInput.value;
+            if (targetId) {
+                socket.send(JSON.stringify({ type: 'request', targetId }));
+                statusDisplay.innerText = `通話リクエストを送信しました: ${targetId}`;
+            } else {
+                alert('相手のIDを入力してください。');
+            }
+        });
+
+        // WebSocketメッセージの処理
+        socket.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+
+            switch (data.type) {
+                case 'id':
+                    clientIdDisplay.innerText = data.id;
+                    break;
+                case 'request':
+                    handleIncomingRequest(data);
+                    break;
+                case 'response':
+                    handleResponse(data);
+                    break;
+                case 'offer':
+                case 'answer':
+                case 'candidate':
+                    handleWebRTCSignal(data);
+                    break;
+                default:
+                    console.error('Unknown message type:', data.type);
+            }
+        };
+
+        // 通話リクエストを受信した場合の処理
+        const handleIncomingRequest = (data) => {
+            const accept = confirm(`User ${data.from} から通話リクエストがあります。承諾しますか？`);
+            socket.send(
+                JSON.stringify({ type: 'response', targetId: data.from, accepted: accept })
+            );
+            if (accept) {
+                statusDisplay.innerText = `通話を承諾しました: ${data.from}`;
+                startCall(data.from, true); // 承諾した側のセットアップ
+            }
+        };
+
+        // 通話リクエストの応答処理
+        const handleResponse = (data) => {
+            if (data.accepted) {
+                statusDisplay.innerText = `User ${data.from} が通話を承諾しました。`;
+                startCall(data.from, false); // リクエストを送った側のセットアップ
+            } else {
+                statusDisplay.innerText = `User ${data.from} が通話を拒否しました。`;
+            }
+        };
+
+        // WebRTC接続のセットアップ
+        const startCall = async (targetId, isReceiver) => {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            pc = new RTCPeerConnection();
+
+            // ローカルストリームを接続に追加
+            localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+            // ICE候補の送信
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.send(
+                        JSON.stringify({ type: 'candidate', candidate: event.candidate, targetId })
+                    );
+                }
+            };
+
+            // リモートストリームを受信
+            pc.ontrack = (event) => {
+                const remoteAudio = new Audio();
+                remoteAudio.srcObject = event.streams[0];
+                remoteAudio.play();
+            };
+
+            if (!isReceiver) {
+                // オファーの作成と送信
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.send(JSON.stringify({ type: 'offer', offer, targetId }));
+            }
+        };
+
+        // WebRTCシグナリングメッセージの処理
+        const handleWebRTCSignal = async (data) => {
+            switch (data.type) {
+                case 'offer':
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    socket.send(
+                        JSON.stringify({ type: 'answer', answer, targetId: data.from })
+                    );
+                    break;
+                case 'answer':
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    break;
+                case 'candidate':
+                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    break;
+            }
+        };
+    </script>
+</body>
+</html>

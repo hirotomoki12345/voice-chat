@@ -1,0 +1,17 @@
+{
+    "name": "websocket-call-app",
+    "version": "1.0.0",
+    "description": "A WebSocket-based voice call app",
+    "main": "server.js",
+    "scripts": {
+      "start": "node server.js"
+    },
+    "dependencies": {
+      "express": "^4.18.2",
+      "uuid": "^11.0.3",
+      "ws": "^8.18.0"
+    },
+    "author": "",
+    "license": "ISC"
+  }
+  
